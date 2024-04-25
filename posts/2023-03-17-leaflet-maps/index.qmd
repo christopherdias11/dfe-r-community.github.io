@@ -1,0 +1,172 @@
+---
+title: "Maps: they don't love you like I love you"
+author: "Jacob Scott"
+date: "2023-03-17"
+categories: [news]
+description: 'A beginners guide into creating interactive maps'
+image: "logo-small.png"
+execute: 
+  message: false
+  warning: false
+---
+
+```{r setup}
+#| echo: false
+#| results: 'hide'
+
+# The following (commented) code can be used to create a post-specific lockfile. 
+# This should be run interactively by copy/pasting into the RStudio console.
+#
+   # renv::snapshot("posts/2023-03-17-leaflet-maps/", prompt = FALSE)
+#
+# This records the R version you used, and the versions of any packages.
+# Then, if anyone needs to re-render your post (potentially in the distant future), 
+# the following call to `renv::use()` tells R to use those same versions of 
+# packages when executing your code.
+renv::use(lockfile = "renv.lock")
+```
+
+# Overview
+
+This blog will cover some entry-level pieces around interactive mapping using the leaflet package and using maps effectively. Leaflet is a javascript library for which there is a really good R package to make interactive maps easily integrated into documents.
+
+# Start Me Up
+
+The first step is to install and load the leaflet package. The fundamental function you will want is **`leaflet()`**. This is the starter function which creates a grey map and from this you can build. We'll add some default background tiles using **`addTiles()`**, add a scalebar with **`addScaleBar()`** and set a starting zoom level using **`setView()`**. We'll focus in on England.
+
+```{r pt1}
+map1 <- leaflet::leaflet() |>
+  leaflet::addTiles() |>
+  leaflet::addScaleBar(position = "bottomleft") |>
+  leaflet::setView(lng = -2.5, lat = 53.5, zoom = 6)
+
+map1
+```
+
+## Points of Authority (Adding Markers)
+
+We can start building up our map by adding point markers. These will need longitude and latitude so the map can plot it in the correct place.
+
+We will start by creating a list of places to add. It doesn't need to be a data frame, mine just is. The key things are numeric values for lng and lat parameters. We've assigned a list to the data which means we can use the ~ to reference elements of the object. We will show a couple of marker options; markers, circle markers and custom icons.
+
+```{r markers}
+markers <- list(
+  "downing_street" = list(lng = -0.1275, lat = 51.5032, name = "No. 10 Downing Street"),
+  "holyrood" = list(lng = -3.172272, lat = 55.95271, name = "Holyrood"),
+  "senedd" = list(lng = -3.16135, lat = 51.464504, name = "Senedd Cymru")
+)
+
+dragon <- leaflet::makeIcon(iconUrl = "dragon.png", iconHeight = 40, iconWidth = 40)
+
+map2 <- map1 |>
+  leaflet::addMarkers(
+    data = markers$holyrood,
+    lng = ~lng,
+    lat = ~lat,
+    label = ~name
+  ) |>
+  leaflet::addCircleMarkers(
+    data = markers$downing_street,
+    lng = ~lng,
+    lat = ~lat,
+    label = ~name
+  ) |>
+  leaflet::addMarkers(
+    data = markers$senedd,
+    lng = ~lng,
+    lat = ~lat,
+    label = ~name,
+    icon = dragon
+  )
+
+map2
+```
+
+## Shape of You (Adding Boundary Layers)
+
+Boundary files are a powerful way of representing spatial data of an area.
+These are polygons that are rendered over your . Working in Government, a wonderful source of these files is the [ONS
+Geoportal](https://geoportal.statistics.gov.uk/). They can be chunky so
+worth considering whether to get a full or generalised output. These can be simplified further using [mapshaper](https://mapshaper.org/). You can pick whatever data type you want - I like shapefiles so will stick with them.
+
+Four fundamental parts of shapefiles you will need, all with the same name; .dbf, .prj, .shp and .shx. We're going to load some English regions (england_regions_2022) so will need the following:
+
++ england_regions_2022.dbf
++ england_regions_2022.prj
++ england_regions_2022.shp
++ england_regions_2022.shx
+
+We're going to load it using the **sf** package. The *dsn* should be the folder within which to find the files and the layer the prefix name before the file types i.e. england_regions_2022.
+
+Next, we're going to add them to our map using **`addPolygons`**. Leaflet likes specific coordinate systems so we're going to transform to co-ordinate reference system 4326 (WGS 84) using **`st_transform()`** (more on [spatial reference systems](https://en.wikipedia.org/wiki/Spatial_reference_system)).
+
+```{r shapefile}
+regions <- sf::read_sf(dsn = "shapes", layer = "england_regions_2022") |>
+  sf::st_transform(crs = 4326)
+
+map3 <- map2 |>
+  leaflet::addPolygons(data = regions)
+
+map3
+```
+
+We now have some shapes but a fairly hideous to look at so we will revisit to customise more. 
+
+# dc
+
+Ordering layers, customising popups and adding 
+
+## Come Together
+
+A really useful part of leaflet is adding map elements to groups. You can combine elements using the **group** parameter in 
+
+```{r groups}
+markers <- list(
+  "downing_street" = list(lng = -0.1275, lat = 51.5032, name = "No. 10 Downing Street"),
+  "holyrood" = list(lng = -3.172272, lat = 55.95271, name = "Holyrood"),
+  "senedd" = list(lng = -3.16135, lat = 51.464504, name = "Senedd Cymru")
+)
+
+dragon <- leaflet::makeIcon(iconUrl = "dragon.png", iconHeight = 40, iconWidth = 40)
+
+map4 <- map1 |>
+  leaflet::addMarkers(
+    data = markers$holyrood,
+    lng = ~lng,
+    lat = ~lat,
+    label = ~name,
+    group = "Markers"
+  ) |>
+  leaflet::addCircleMarkers(
+    data = markers$downing_street,
+    lng = ~lng,
+    radius = 10,
+    fillOpacity = 0.4,
+    opacity = 1,
+    weight = 2,
+    fillColor = "yellow",
+    color = "black",
+    lat = ~lat,
+    label = ~name,
+    group = "Markers"
+  ) |>
+  leaflet::addMarkers(
+    data = markers$senedd,
+    lng = ~lng,
+    lat = ~lat,
+    label = ~name,
+    icon = dragon,
+    group = "Markers"
+  ) |>
+  leaflet::addLayersControl(
+    overlayGroups = "Markers",
+    options = leaflet::layersControlOptions(collapsed = FALSE)
+  )
+
+map4
+```
+
+## Love On Top
+
+## How Deep Is Your Love
+
